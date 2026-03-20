@@ -9,6 +9,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 :root {
   --bg:#0a0f1a; --surface:#111827; --surface2:#1a2235; --surface3:#1e2d42;
@@ -380,15 +381,15 @@ td{padding:11px 14px;vertical-align:middle;}
     </div>
     <div class="login-form">
       <div class="form-group">
-        <label class="form-label">Selecciona tu usuario</label>
-        <div class="login-user-select" id="userOptions"></div>
+        <label class="form-label">Correo electrónico</label>
+        <input type="email" class="form-input" id="loginEmail" placeholder="usuario@cepa.gob.sv" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <div class="form-group">
         <label class="form-label">Contraseña</label>
         <input type="password" class="form-input" id="loginPass" placeholder="Ingresa tu contraseña" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
-      <div class="login-err" id="loginErr">Contraseña incorrecta. Intenta de nuevo.</div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="doLogin()">Iniciar Sesión</button>
+      <div class="login-err" id="loginErr">Credenciales incorrectas. Intenta de nuevo.</div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" id="btnLogin" onclick="doLogin()">Iniciar Sesión</button>
     </div>
   </div>
 </div>
@@ -816,12 +817,13 @@ td{padding:11px 14px;vertical-align:middle;}
     <div class="section-header"><div class="section-title">Gestión de Usuarios</div><div class="section-line"></div></div>
     <div id="userCards"></div>
     <div style="margin-top:20px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;">Cambiar Contraseña de Usuario</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;">Cambiar mi contraseña</div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;">
         <div class="form-group"><label class="form-label">Usuario</label><select class="form-select" id="chgUser"><option value="">-- Seleccionar --</option></select></div>
-        <div class="form-group"><label class="form-label">Nueva Contraseña</label><input type="password" class="form-input" id="chgPass" placeholder="Nueva contraseña"></div>
+        <div class="form-group"><label class="form-label">Nueva Contraseña</label><input type="password" class="form-input" id="chgPass" placeholder="Mínimo 6 caracteres"></div>
         <button class="btn btn-primary" onclick="changePassword()">Actualizar</button>
       </div>
+      <div style="margin-top:10px;font-size:11px;color:var(--text3);">⚠ Solo puedes cambiar tu propia contraseña. Para cambiar la del Auditor, ve a Firebase Console → Authentication.</div>
     </div>
   </div>
 
@@ -1008,133 +1010,158 @@ td{padding:11px 14px;vertical-align:middle;}
 // ═══════════════════════════════════════════════════════
 //  USERS & AUTH
 // ═══════════════════════════════════════════════════════
-const DEFAULT_USERS = [
-  {
-    id:'jordan',
-    name:'Jordan Aristides Herrera',
-    shortName:'Jordan H.',
-    initials:'JH',
-    role:'superadmin',
-    roleLabel:'Super Administrador',
-    email:'jordan.herrera@cepa.gob.sv',
-    password:'Jordan2026#',
-    avatarClass:'ua-superadmin',
-    perms:'Acceso total: crear, editar, eliminar, ver usuarios, cambiar contraseñas, subir fotos.'
-  },
-  {
-    id:'auditor',
-    name:'Auditor de Inspecciones',
-    shortName:'Auditor',
-    initials:'AU',
-    role:'auditor',
-    roleLabel:'Auditoría',
-    email:'auditoria@cepa.gob.sv',
-    password:'Audit2026#',
-    avatarClass:'ua-auditor',
-    perms:'Solo lectura: puede ver todas las inspecciones, detalles y gráficas. No puede crear, editar ni eliminar.'
-  }
-];
+// ═══════════════════════════════════════════════════════
+//  USERS & AUTH — Firebase Authentication
+//  Contraseñas gestionadas por Firebase, NO en el código
+// ═══════════════════════════════════════════════════════
 
-function getUsers() {
-  const stored = localStorage.getItem('aerodrome_users');
-  if (!stored) { localStorage.setItem('aerodrome_users', JSON.stringify(DEFAULT_USERS)); return DEFAULT_USERS; }
-  const parsed = JSON.parse(stored);
-  // If stored list still has the removed 'admin' (Edward) entry, reset to defaults
-  if (parsed.find(u => u.id === 'admin')) {
-    localStorage.setItem('aerodrome_users', JSON.stringify(DEFAULT_USERS));
-    return DEFAULT_USERS;
+// Mapeo de UID de Firebase → perfil de usuario
+// Las contraseñas NO están aquí, viven en Firebase Auth
+const USER_PROFILES = {
+  'fMZMB4cV6PcU4Vkc88PeZWiJdIU2': {
+    id: 'jordan',
+    name: 'Jordan Aristides Herrera',
+    shortName: 'Jordan H.',
+    initials: 'JH',
+    role: 'superadmin',
+    roleLabel: 'Super Administrador',
+    email: 'jordan.herrera@cepa.gob.sv',
+    avatarClass: 'ua-superadmin',
+    perms: 'Acceso total: crear, editar, eliminar, ver usuarios, cambiar contraseñas, subir fotos.'
+  },
+  'InacRExKKPSXntvvE9uTrkdyro72': {
+    id: 'auditor',
+    name: 'Auditor de Inspecciones',
+    shortName: 'Auditor',
+    initials: 'AU',
+    role: 'auditor',
+    roleLabel: 'Auditoría',
+    email: 'auditor@siad.sv',
+    avatarClass: 'ua-auditor',
+    perms: 'Solo lectura: puede ver todas las inspecciones, detalles y gráficas. No puede crear, editar ni eliminar.'
   }
-  return parsed;
-}
-function saveUsers(u) { localStorage.setItem('aerodrome_users', JSON.stringify(u)); }
+};
 
 let currentUser = null;
-let selectedUserId = null;
 
 function initLogin() {
-  const opts = document.getElementById('userOptions');
-  getUsers().forEach(u => {
-    const d = document.createElement('div');
-    d.className = 'user-option';
-    d.dataset.id = u.id;
-    d.innerHTML = `<div class="uo-role">${u.roleLabel}</div><div class="uo-name">${u.shortName}</div><div class="uo-badge"><span class="role-badge role-${u.role}">${u.role}</span></div>`;
-    d.onclick = () => { document.querySelectorAll('.user-option').forEach(x=>x.classList.remove('selected')); d.classList.add('selected'); selectedUserId = u.id; };
-    opts.appendChild(d);
+  // Escuchar estado de autenticación Firebase
+  firebase.auth().onAuthStateChanged(firebaseUser => {
+    if (firebaseUser) {
+      const profile = USER_PROFILES[firebaseUser.uid];
+      if (profile) {
+        currentUser = profile;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'block';
+        setupForRole();
+        init();
+      } else {
+        // UID no reconocido — cerrar sesión
+        firebase.auth().signOut();
+        showLoginErr('Usuario no autorizado en este sistema.');
+      }
+    } else {
+      currentUser = null;
+      document.getElementById('appShell').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'flex';
+    }
   });
-  // populate chgUser
+
+  // Populate chgUser dropdown
   const sel = document.getElementById('chgUser');
-  getUsers().forEach(u => { const o=document.createElement('option'); o.value=u.id; o.textContent=u.name; sel.appendChild(o); });
+  Object.values(USER_PROFILES).forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.email; o.textContent = u.name;
+    sel.appendChild(o);
+  });
 }
 
-function doLogin() {
-  if (!selectedUserId) { showLoginErr('Selecciona un usuario.'); return; }
-  const pass = document.getElementById('loginPass').value;
-  const users = getUsers();
-  const user = users.find(u => u.id === selectedUserId);
-  if (!user || user.password !== pass) { showLoginErr('Contraseña incorrecta. Intenta de nuevo.'); return; }
-  currentUser = user;
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appShell').style.display = 'block';
-  setupForRole();
-  init();
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) { showLoginErr('Ingresa correo y contraseña.'); return; }
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true; btn.textContent = '⏳ Verificando...';
+  try {
+    await firebase.auth().signInWithEmailAndPassword(email, pass);
+    // onAuthStateChanged maneja el resto
+  } catch(e) {
+    const msgs = {
+      'auth/user-not-found': 'Correo no registrado.',
+      'auth/wrong-password': 'Contraseña incorrecta.',
+      'auth/invalid-email': 'Correo inválido.',
+      'auth/invalid-credential': 'Credenciales incorrectas.',
+      'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde.'
+    };
+    showLoginErr(msgs[e.code] || 'Error al iniciar sesión.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Iniciar Sesión';
+  }
 }
 
 function showLoginErr(msg) {
   const e = document.getElementById('loginErr');
   e.textContent = msg; e.style.display = 'block';
-  setTimeout(() => e.style.display='none', 3000);
+  setTimeout(() => e.style.display = 'none', 4000);
 }
 
-function doLogout() {
-  currentUser = null; selectedUserId = null;
+async function doLogout() {
+  await firebase.auth().signOut();
+  document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value = '';
-  document.querySelectorAll('.user-option').forEach(x=>x.classList.remove('selected'));
-  document.getElementById('appShell').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
 }
 
 function setupForRole() {
   const r = currentUser.role;
-  // Header
   document.getElementById('hdrAvatar').textContent = currentUser.initials;
   document.getElementById('hdrName').textContent = currentUser.shortName;
   document.getElementById('hdrRole').innerHTML = `<span class="role-badge role-${r}">${currentUser.roleLabel}</span>`;
-  // Tabs
-  document.getElementById('tabUsuarios').style.display = r==='superadmin' ? 'flex' : 'none';
-  // New buttons
-  const canCreate = r==='superadmin'||r==='admin';
+  document.getElementById('tabUsuarios').style.display = r === 'superadmin' ? 'flex' : 'none';
+  const canCreate = r === 'superadmin' || r === 'admin';
   ['btnNewDash','btnNewAb','btnNewSeg','btnNewSN','btnNewTodas'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = canCreate ? 'inline-flex' : 'none';
   });
-  // Render users tab
   renderUsersTab();
 }
 
 function can(action) {
   if (!currentUser) return false;
   const r = currentUser.role;
-  if (r==='superadmin') return true;
-  if (action==='create'||action==='edit'||action==='close'||action==='photo') return r==='admin';
-  if (action==='delete'||action==='manageUsers') return false;
+  if (r === 'superadmin') return true;
+  if (action === 'create' || action === 'edit' || action === 'close' || action === 'photo') return r === 'admin';
+  if (action === 'delete' || action === 'manageUsers') return false;
   return false;
 }
 
-function changePassword() {
+async function changePassword() {
   if (currentUser.role !== 'superadmin') return;
-  const uid = document.getElementById('chgUser').value;
-  const pass = document.getElementById('chgPass').value.trim();
-  if (!uid||!pass) { showToast('⚠ Selecciona usuario e ingresa contraseña'); return; }
+  const email = document.getElementById('chgUser').value;
+  const pass  = document.getElementById('chgPass').value.trim();
+  if (!email || !pass) { showToast('⚠ Selecciona usuario e ingresa contraseña'); return; }
   if (pass.length < 6) { showToast('⚠ Mínimo 6 caracteres'); return; }
-  const users = getUsers();
-  const u = users.find(x=>x.id===uid);
-  if (u) { u.password=pass; saveUsers(users); showToast('✅ Contraseña actualizada para '+u.shortName); document.getElementById('chgPass').value=''; }
+  try {
+    // Usar Firebase Admin via REST para cambiar contraseña del usuario seleccionado
+    // Como estamos en cliente, solo podemos cambiar la del usuario actual
+    // Para cambiar la de otro usuario se necesita Admin SDK (backend)
+    // Por ahora, si Jordan quiere cambiar SU propia contraseña:
+    const user = firebase.auth().currentUser;
+    await user.updatePassword(pass);
+    showToast('✅ Contraseña actualizada correctamente');
+    document.getElementById('chgPass').value = '';
+  } catch(e) {
+    if (e.code === 'auth/requires-recent-login') {
+      showToast('⚠ Por seguridad, cierra sesión, vuelve a entrar e intenta de nuevo.');
+    } else {
+      showToast('❌ Error: ' + e.message);
+    }
+  }
 }
 
 function renderUsersTab() {
   const cont = document.getElementById('userCards');
   if (!cont) return;
-  cont.innerHTML = getUsers().map(u => `
+  cont.innerHTML = Object.values(USER_PROFILES).map(u => `
     <div class="user-card">
       <div class="user-avatar-lg ${u.avatarClass}">${u.initials}</div>
       <div class="user-info">
